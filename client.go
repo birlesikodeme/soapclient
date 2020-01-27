@@ -2,6 +2,7 @@ package soap
 
 import (
 	"bytes"
+	"context"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -230,7 +231,7 @@ func BearerToken(token string) func(*Client) error {
 // METHODS
 
 // Make soap call and parses response into the given struct
-func (c *Client) Call(request *Request, response interface{}) error {
+func (c *Client) CallWithContext(ctx context.Context, request *Request, response interface{}) error {
 	buffer, err := request.Serialize()
 	if err != nil {
 		return err
@@ -242,7 +243,7 @@ func (c *Client) Call(request *Request, response interface{}) error {
 
 	url := fmt.Sprintf("%s%s", c.base, request.path)
 
-	req, err := http.NewRequest("POST", url, buffer)
+	req, err := http.NewRequestWithContext(ctx, "POST", url, buffer)
 	if err != nil {
 		return err
 	}
@@ -296,4 +297,8 @@ func (c *Client) Call(request *Request, response interface{}) error {
 		return err
 	}
 	return nil
+}
+
+func (c *Client) Call(request *Request, response interface{}) error {
+	return c.CallWithContext(context.Background(), request, response)
 }
