@@ -3,6 +3,7 @@ package soap
 import (
 	"bytes"
 	"encoding/xml"
+	"strings"
 )
 
 type Request struct {
@@ -133,7 +134,7 @@ func AddAttributes(attributes ...xml.Attr) func(*Request) error {
 	// If no attribute with name soapenv, set default value
 	found := false
 	for _, attribute := range attributes {
-		if attribute.Name.Local == "soapenv" {
+		if strings.Contains(attribute.Name.Local, "soapenv") {
 			found = true
 		}
 	}
@@ -145,7 +146,7 @@ func AddAttributes(attributes ...xml.Attr) func(*Request) error {
 		if found {
 			filtered := requestAttributes[:0]
 			for _, attribute := range requestAttributes {
-				if attribute.Name.Local != "soapenv" {
+				if !strings.Contains(attribute.Name.Local, "soapenv") {
 					filtered = append(filtered, attribute)
 				}
 			}
