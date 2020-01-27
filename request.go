@@ -53,7 +53,7 @@ type RequestSOAPBody struct {
 }
 
 // Creates a new soap request with given attributes
-func NewRequest(path string, body interface{}, header []interface{}, options ...func(*Request) error) *Request {
+func NewRequest(path string, body interface{}, header []interface{}, options ...func(*Request) error) (*Request, error) {
 
 	// Fill soap envelope
 	envelope := Request{
@@ -74,7 +74,14 @@ func NewRequest(path string, body interface{}, header []interface{}, options ...
 
 	envelope.Body.Content = body
 
-	return &envelope
+	for _, option := range options {
+		err := option(&envelope)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &envelope, nil
 }
 
 // OPTIONS
