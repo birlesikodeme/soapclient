@@ -141,6 +141,7 @@ type Client struct {
 	//
 	base  string
 	debug bool
+
 	// Basic Authentication if needed
 	username string
 	password string
@@ -188,7 +189,7 @@ func DebugMode() func(*Client) error {
 }
 
 // Use basic authentication with given username and password
-func BasicAuth(username string, password string) func(*Client) error {
+func DefaultBasicAuth(username string, password string) func(*Client) error {
 	return func(client *Client) error {
 		client.username = username
 		client.password = password
@@ -197,7 +198,7 @@ func BasicAuth(username string, password string) func(*Client) error {
 }
 
 // Sets user agent
-func UserAgent(userAgent string) func(*Client) error {
+func DefaultUserAgent(userAgent string) func(*Client) error {
 	return func(client *Client) error {
 		client.userAgent = userAgent
 		return nil
@@ -205,7 +206,7 @@ func UserAgent(userAgent string) func(*Client) error {
 }
 
 // Sets default content type
-func ContentType(contentType string) func(*Client) error {
+func DefaultContentType(contentType string) func(*Client) error {
 	return func(client *Client) error {
 		client.contentType = contentType
 		return nil
@@ -213,7 +214,7 @@ func ContentType(contentType string) func(*Client) error {
 }
 
 // Sets default soap action
-func Action(action string) func(*Client) error {
+func DefaultAction(action string) func(*Client) error {
 	return func(client *Client) error {
 		client.action = action
 		return nil
@@ -221,7 +222,7 @@ func Action(action string) func(*Client) error {
 }
 
 // Sets http client to use given token
-func BearerToken(token string) func(*Client) error {
+func DefaultBearerToken(token string) func(*Client) error {
 	return func(client *Client) error {
 		client.bearerToken = token
 		return nil
@@ -231,8 +232,8 @@ func BearerToken(token string) func(*Client) error {
 // METHODS
 
 // Make soap call and parses response into the given struct
-func (c *Client) CallWithContext(ctx context.Context, request *Request, response interface{}) error {
-	buffer, err := request.Serialize()
+func (c *Client) CallWithContext(ctx context.Context, soapReq *Request, response interface{}) error {
+	buffer, err := soapReq.Serialize()
 	if err != nil {
 		return err
 	}
@@ -241,40 +242,50 @@ func (c *Client) CallWithContext(ctx context.Context, request *Request, response
 		debugPrintXml("Request:", []byte(buffer.String()))
 	}
 
-	url := fmt.Sprintf("%s%s", c.base, request.path)
+	url := fmt.Sprintf("%s%s", c.base, soapReq.path)
 
-	req, err := http.NewRequestWithContext(ctx, "POST", url, buffer)
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, buffer)
 	if err != nil {
 		return err
 	}
 
-	if c.contentType != "" {
-		req.Header.Add("Content-Type", c.contentType)
+	if soapReq.contentType != "" {
+		httpReq.Header.Add("Content-Type", soapReq.contentType)
+	} else if c.contentType != "" {
+		httpReq.Header.Add("Content-Type", c.contentType)
 	} else {
-		req.Header.Add("Content-Type", "text/xml; charset=\"utf-8\"")
+		httpReq.Header.Add("Content-Type", "text/xml; charset=\"utf-8\"")
 	}
 
-	if c.action != "" {
-		req.Header.Add("SOAPAction", c.action)
+	if soapReq.action != "" {
+		httpReq.Header.Add("SOAPAction", soapReq.action)
+	} else if c.action != "" {
+		httpReq.Header.Add("SOAPAction", c.action)
 	}
 
-	if c.userAgent != "" {
-		req.Header.Set("User-Agent", c.userAgent)
+	if soapReq.userAgent != "" {
+		httpReq.Header.Set("User-Agent", soapReq.userAgent)
+	} else if c.userAgent != "" {
+		httpReq.Header.Add("User-Agent", c.userAgent)
 	} else {
-		req.Header.Set("User-Agent", "Go")
+		httpReq.Header.Set("User-Agent", "Go")
 	}
 
-	req.Close = true
+	httpReq.Close = true
 
-	if c.username != "" {
-		req.SetBasicAuth(c.username, c.password)
+	if soapReq.username != "" {
+		httpReq.SetBasicAuth(soapReq.username, soapReq.password)
+	} else if c.username != "" {
+		httpReq.SetBasicAuth(c.username, c.password)
 	}
 
-	if c.bearerToken != "" {
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.bearerToken))
+	if soapReq.bearerToken != "" {
+		httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", soapReq.bearerToken))
+	} else if c.bearerToken != "" {
+		httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.bearerToken))
 	}
 
-	res, err := c.httpClient.Do(req)
+	res, err := c.httpClient.Do(httpReq)
 	if err != nil {
 		return err
 	}

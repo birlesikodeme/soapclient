@@ -12,7 +12,20 @@ type Request struct {
 	Header RequestSOAPHeader
 	Body   RequestSOAPBody
 
+	// Path of the soap action after the base address
 	path string `xml:"-"`
+
+	// Basic Authentication if needed
+	username string `xml:"-"`
+	password string `xml:"-"`
+
+	// OAuth Authentication
+	bearerToken string `xml:"-"`
+
+	// Metadata
+	userAgent   string `xml:"-"`
+	contentType string `xml:"-"`
+	action      string `xml:"-"`
 }
 
 type RequestSOAPEnvelope struct {
@@ -40,29 +53,18 @@ type RequestSOAPBody struct {
 }
 
 // Creates a new soap request with given attributes
-// If no attribute with "soapenv" is given, default value is used
-func NewRequest(path string, body interface{}, header []interface{}, action string, attributes ...xml.Attr) *Request {
-
-	// If no attribute with name soapenv, set default value
-	found := false
-	for _, attribute := range attributes {
-		if attribute.Name.Local == "soapenv" {
-			found = true
-		}
-	}
-
-	if !found {
-		attributes = append(attributes, xml.Attr{
-			Name:  xml.Name{Local: "soapenv",},
-			Value: "http://schemas.xmlsoap.org/soap/envelope/",
-		})
-	}
+func NewRequest(path string, body interface{}, header []interface{}, options ...func(*Request) error) *Request {
 
 	// Fill soap envelope
-
 	envelope := Request{
-		path:       path,
-		Attributes: attributes,
+		path: path,
+		Attributes: []xml.Attr{
+			// Set default attribute for soapenv
+			{
+				Name:  xml.Name{Local: "soapenv",},
+				Value: "http://schemas.xmlsoap.org/soap/envelope/",
+			},
+		},
 	}
 
 	// Only add header if it exists
@@ -75,6 +77,81 @@ func NewRequest(path string, body interface{}, header []interface{}, action stri
 	return &envelope
 }
 
+// OPTIONS
+
+// Use basic authentication with given username and password
+func BasicAuth(username string, password string) func(*Request) error {
+	return func(request *Request) error {
+		request.username = username
+		request.password = password
+		return nil
+	}
+}
+
+// Sets user agent
+func UserAgent(userAgent string) func(*Request) error {
+	return func(request *Request) error {
+		request.userAgent = userAgent
+		return nil
+	}
+}
+
+// Sets default content type
+func ContentType(contentType string) func(*Request) error {
+	return func(request *Request) error {
+		request.contentType = contentType
+		return nil
+	}
+}
+
+// Sets default soap action
+func Action(action string) func(*Request) error {
+	return func(request *Request) error {
+		request.action = action
+		return nil
+	}
+}
+
+// Sets http client to use given token
+func BearerToken(token string) func(*Request) error {
+	return func(request *Request) error {
+		request.bearerToken = token
+		return nil
+	}
+}
+
+// Add new attributes to use with request. Default: [soapenv:"http://schemas.xmlsoap.org/soap/envelope/"]
+func AddAttributes(attributes ...xml.Attr) func(*Request) error {
+
+	// If no attribute with name soapenv, set default value
+	found := false
+	for _, attribute := range attributes {
+		if attribute.Name.Local == "soapenv" {
+			found = true
+		}
+	}
+
+	return func(request *Request) error {
+
+		requestAttributes := request.Attributes
+		// Remove existing soapenv value
+		if found {
+			filtered := requestAttributes[:0]
+			for _, attribute := range requestAttributes {
+				if attribute.Name.Local != "soapenv" {
+					filtered = append(filtered, attribute)
+				}
+			}
+			requestAttributes = filtered
+		}
+
+		// Combine exiting attributes with new
+		request.Attributes = append(requestAttributes, attributes...)
+		return nil
+	}
+}
+
+// METHODS
 func (r Request) Serialize() (*bytes.Buffer, error) {
 	buff := new(bytes.Buffer)
 
