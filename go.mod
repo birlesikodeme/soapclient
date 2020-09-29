@@ -1,3 +1,3 @@
-module github.com/birlesikodeme/soap
+module github.com/birlesikodeme/soapclient
 
 go 1.13

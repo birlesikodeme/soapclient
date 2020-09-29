@@ -1,4 +1,4 @@
-package soap
+package v2
 
 import (
 	"bytes"

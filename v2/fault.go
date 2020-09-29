@@ -1,11 +1,11 @@
-package soap
+package v2
 
 import (
 	"encoding/xml"
 	"fmt"
 )
 
-type SOAPFault struct {
+type Fault struct {
 	XMLName xml.Name `xml:"http://schemas.xmlsoap.org/soap/envelope/ Fault"`
 
 	Code   string `xml:"faultcode,omitempty"`
@@ -14,6 +14,6 @@ type SOAPFault struct {
 	Detail string `xml:"detail,omitempty"`
 }
 
-func (f *SOAPFault) Error() string {
+func (f *Fault) Error() string {
 	return fmt.Sprintf("Soap Fault: %s: [%s] %s", f.Code, f.Actor, f.String)
 }
