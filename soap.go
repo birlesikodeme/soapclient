@@ -17,7 +17,7 @@ import (
 var _ time.Time
 var _ xml.Name
 
-var timeout = time.Duration(30 * time.Second)
+var defaultTimeout = 30 * time.Second
 
 type RequestSOAPEnvelope struct {
 	XMLName xml.Name `xml:"soapenv:Envelope"`
@@ -78,6 +78,8 @@ type SOAPClient struct {
 	contentType string
 
 	client *http.Client
+	// Global headers to be used in every call
+	httpHeaders map[string]string
 }
 
 func (b *ResponseSOAPBody) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
@@ -132,17 +134,15 @@ Loop:
 
 func NewSOAPClient(base string, tls bool, debug bool) *SOAPClient {
 	return &SOAPClient{
-		base:   base,
-		tls:    tls,
-		debug:  debug,
-		client: nil,
+		base:  base,
+		tls:   tls,
+		debug: debug,
 	}
 }
 
-func NewSOAPClientWithClient(base string, tls bool, debug bool, client *http.Client) *SOAPClient {
+func NewSOAPClientWithClient(base string, debug bool, client *http.Client) *SOAPClient {
 	return &SOAPClient{
 		base:   base,
-		tls:    tls,
 		debug:  debug,
 		client: client,
 	}
@@ -220,6 +220,18 @@ func (s *SOAPClient) SetContentType(contentType string) {
 	s.contentType = contentType
 }
 
+func (s *SOAPClient) SetHeaders(headers map[string]string) {
+	s.httpHeaders = headers
+}
+
+func (s *SOAPClient) SetHeader(key, value string) {
+	if s.httpHeaders == nil {
+		s.httpHeaders = map[string]string{}
+	}
+
+	s.httpHeaders[key] = value
+}
+
 func basicAuth(username, password string) string {
 	auth := username + ":" + password
 	return base64.StdEncoding.EncodeToString([]byte(auth))
@@ -258,6 +270,15 @@ func (s *SOAPClient) Call(path, action string, header []interface{}, request, re
 		req.Header.Set("User-Agent", "Go")
 	}
 
+	// Override defaults with global headers
+	if s.httpHeaders == nil {
+		s.httpHeaders = map[string]string{}
+	}
+
+	for key, val := range s.httpHeaders {
+		req.Header.Set(key, val)
+	}
+
 	req.Close = true
 
 	if s.username != "" {
@@ -277,7 +298,7 @@ func (s *SOAPClient) Call(path, action string, header []interface{}, request, re
 			// Dial timeout limits the time spent establishing a TCP connection (if a new one is needed). [1]
 			// [1] https://blog.cloudflare.com/the-complete-guide-to-golang-net-http-timeouts/
 			DialContext: (&net.Dialer{
-				Timeout: timeout,
+				Timeout: defaultTimeout,
 			}).DialContext,
 		}
 
@@ -286,7 +307,7 @@ func (s *SOAPClient) Call(path, action string, header []interface{}, request, re
 			// By default http.client doesn't timeout [2]
 			// [2] https://medium.com/@nate510/don-t-use-go-s-default-http-client-4804cb19f779
 			// http.Client.Timeout includes all time spent following redirects, while the granular timeouts are specific for each request, since http.Transport is a lower level system that has no concept of redirects. [1
-			Timeout: 3 * timeout,
+			Timeout: 3 * defaultTimeout,
 		}
 	}
 
