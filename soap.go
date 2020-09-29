@@ -76,6 +76,8 @@ type SOAPClient struct {
 
 	userAgent   string
 	contentType string
+
+	client *http.Client
 }
 
 func (b *ResponseSOAPBody) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
@@ -130,9 +132,19 @@ Loop:
 
 func NewSOAPClient(base string, tls bool, debug bool) *SOAPClient {
 	return &SOAPClient{
-		base:  base,
-		tls:   tls,
-		debug: debug,
+		base:   base,
+		tls:    tls,
+		debug:  debug,
+		client: nil,
+	}
+}
+
+func NewSOAPClientWithClient(base string, tls bool, debug bool, client *http.Client) *SOAPClient {
+	return &SOAPClient{
+		base:   base,
+		tls:    tls,
+		debug:  debug,
+		client: client,
 	}
 }
 
@@ -252,25 +264,32 @@ func (s *SOAPClient) Call(path, action string, header []interface{}, request, re
 		req.Header.Set("Authorization", "Basic "+basicAuth(s.username, s.password))
 	}
 
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: s.tls,
-		},
+	var client *http.Client
 
-		// Dial timeout limits the time spent establishing a TCP connection (if a new one is needed). [1]
-		// [1] https://blog.cloudflare.com/the-complete-guide-to-golang-net-http-timeouts/
-		DialContext: (&net.Dialer{
-			Timeout: timeout,
-		}).DialContext,
+	if s.client != nil {
+		client = s.client
+	} else {
+		tr := &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: s.tls,
+			},
+
+			// Dial timeout limits the time spent establishing a TCP connection (if a new one is needed). [1]
+			// [1] https://blog.cloudflare.com/the-complete-guide-to-golang-net-http-timeouts/
+			DialContext: (&net.Dialer{
+				Timeout: timeout,
+			}).DialContext,
+		}
+
+		client = &http.Client{
+			Transport: tr,
+			// By default http.client doesn't timeout [2]
+			// [2] https://medium.com/@nate510/don-t-use-go-s-default-http-client-4804cb19f779
+			// http.Client.Timeout includes all time spent following redirects, while the granular timeouts are specific for each request, since http.Transport is a lower level system that has no concept of redirects. [1
+			Timeout: 3 * timeout,
+		}
 	}
 
-	client := &http.Client{
-		Transport: tr,
-		// By default http.client doesn't timeout [2]
-		// [2] https://medium.com/@nate510/don-t-use-go-s-default-http-client-4804cb19f779
-		// http.Client.Timeout includes all time spent following redirects, while the granular timeouts are specific for each request, since http.Transport is a lower level system that has no concept of redirects. [1
-		Timeout: 3 * timeout,
-	}
 	res, err := client.Do(req)
 	if err != nil {
 		return err
