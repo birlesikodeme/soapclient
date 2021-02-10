@@ -360,7 +360,7 @@ func formatXML(data []byte) ([]byte, error) {
 func debugPrintXml(info string, data []byte) {
 	fmt.Println()
 	fmt.Println("************************************************************************************")
-	fmt.Println(info)
+	fmt.Println(info + fmt.Sprintf("%s",time.Now().UTC()))
 	b, _ := formatXML(data)
 	fmt.Println(string(b))
 	fmt.Println()
